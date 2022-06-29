@@ -1,12 +1,18 @@
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <WiFiClient.h>
-#include <WebServer.h>
-#include <ESPmDNS.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include <ArduinoJson.h>
 
+#include <SPI.h>
+#include <Adafruit_SSD1306.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
+
+#define OLED_RESET -1
+Adafruit_SSD1306 display(128, 32, &Wire);
+#define OLED_address  0x3c 
 
 const char* ssid = "Link Start";
 const char* password = "1234#563";
@@ -15,7 +21,7 @@ IPAddress ip(192,168,1,25);
 IPAddress gateway(192,168,1,1); 
 IPAddress subnet(255,255,255,0);
 
-WebServer server(80);
+ESP8266WebServer server(80);
 
 Adafruit_MPU6050 mpu;
 float accer_x[1000],
@@ -26,11 +32,23 @@ float  gyro_x_array[1000],
        gyro_y_array[1000],
        gyro_z_array[1000],
        time_xyz_array[1000];
+float time_to_action;
          
 void Accer_Gyro(){
       unsigned long timexyz = millis();
       int i = 0;
       sensors_event_t a, g, temp;
+
+      time_to_action = millis();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+  
+      display.clearDisplay();
+      display.print("Coletando Dados...");
+      display.println();
+      display.display();
+      
       while(i!=800){ 
     
         mpu.getEvent(&a, &g, &temp);
@@ -52,11 +70,24 @@ void Accer_Gyro(){
       Serial.print(F("Stream..."));
       String buf;
       serializeJson(doc, buf);
+
+      time_to_action = millis();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+  
+      display.clearDisplay();
+      display.print("Dados Coletados!");
+      display.println();
+      display.display();
+      
       server.send(200, "application/json");
       Serial.print(F("done."));
 }
+
 void getAccer_Gyro() {
-      DynamicJsonDocument doc(107000);
+  
+      DynamicJsonDocument doc(100000);
       int i = 0;
       JsonArray acceleration_x = doc.createNestedArray("acceleration_x");
       JsonArray acceleration_y = doc.createNestedArray("acceleration_y");
@@ -76,7 +107,9 @@ void getAccer_Gyro() {
         gyro_z.add(gyro_z_array[i]);
         time_xyz.add(time_xyz_array[i]);
         i++;
+        
       }
+      
       doc["temperature"] = temperature;
           //      delay(10000);
  
@@ -85,9 +118,12 @@ void getAccer_Gyro() {
       serializeJson(doc, buf);
       server.send(200, "application/json", buf);
       Serial.print(F("done."));
+      
 }
+
 void getAccer_Gyro_Unit() {
-      DynamicJsonDocument doc(524);
+  
+      DynamicJsonDocument doc(130);
       unsigned long timexyz = millis();
       int i = 0;
       sensors_event_t a, g, temp;
@@ -103,13 +139,68 @@ void getAccer_Gyro_Unit() {
       doc["time"] = millis()-timexyz;
       doc["temperature"] = temp.temperature;
         //      delay(10000);
- 
+      
       Serial.print(F("Stream..."));
       String buf;
       serializeJson(doc, buf);
       server.send(200, "application/json", buf);
       Serial.print(F("done."));
+      
 }
+
+void getAccer_Gyro_Unit_2() {
+  
+      DynamicJsonDocument doc(524);
+      DynamicJsonDocument doc2(10000);
+      JsonArray object = doc2.createNestedArray("object");
+      unsigned long timexyz = millis();
+      int i = 0;
+      sensors_event_t a, g, temp;
+        
+      mpu.getEvent(&a, &g, &temp);
+
+      time_to_action = millis();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+  
+      display.clearDisplay();
+      display.print("Criando Json...");
+      display.println();
+      display.display();
+      while(i!=9){ 
+        
+          doc["Accer_x"] = accer_x[i];
+          doc["Accer_y"] = accer_y[i];
+          doc["Accer_z"] = accer_z[i];
+          doc["Gyro_x"] = gyro_x_array[i];
+          doc["Gyro_y"] = gyro_y_array[i];
+          doc["Gyro_z"] = gyro_z_array[i];
+          doc["time"] = time_xyz_array[i];
+          doc["temperature"] = temp.temperature;
+        //      delay(10000);
+          object.add(doc);
+          i++;
+      }
+      Serial.print(F("Stream..."));
+      String buf;
+      serializeJson(object, buf);
+
+      time_to_action = millis();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+  
+      display.clearDisplay();
+      display.print("Json Criado...");
+      display.println();
+      display.display();
+      
+      server.send(200, "application/json", buf);
+      Serial.print(F("done."));
+      
+}
+
 // Serving Hello world
 void getSettings() {
      
@@ -122,6 +213,21 @@ void getSettings() {
       Serial.print(F("Stream..."));
       String buf;
       serializeJson(doc, buf);
+
+      time_to_action = millis();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+  
+      display.clearDisplay();
+      display.print("IP: ");
+      display.println(WiFi.localIP());
+      display.print("Gateway: ");  
+      display.println(WiFi.gatewayIP());
+      display.print("Submask: ");
+      display.println(WiFi.localIP());
+      display.display();
+      
       server.send(200, F("application/json"), buf);
       Serial.print(F("done."));
 }
@@ -134,12 +240,26 @@ void restServerRouting() {
     });
     server.on(F("/values"), HTTP_GET, getAccer_Gyro);
     server.on(F("/value"), HTTP_GET, getAccer_Gyro_Unit);
+    server.on(F("/value_2"), HTTP_GET, getAccer_Gyro_Unit_2);
     server.on(F("/settings"), HTTP_GET, getSettings);
     server.on(F("/init_values"),HTTP_GET, Accer_Gyro);
 }
  
 // Manage not found URL
 void handleNotFound() {
+  
+  time_to_action = millis();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  
+  display.clearDisplay();
+  display.print("Not Found: ");
+  display.print("404 error: ");
+  display.print(server.uri());
+  display.println(server.args());
+  display.display();
+  
   String message = "File Not Found\n\n";
   message += "URI: ";
   message += server.uri();
@@ -148,9 +268,11 @@ void handleNotFound() {
   message += "\nArguments: ";
   message += server.args();
   message += "\n";
+  
   for (uint8_t i = 0; i < server.args(); i++) {
     message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
   }
+  
   server.send(404, "text/plain", message);
 }
 
@@ -230,6 +352,7 @@ void setup_MPU6050(){
 
   Serial.println("");
   delay(100);
+  
 }
 
 void setup_wifi(){
@@ -244,20 +367,23 @@ void setup_wifi(){
     delay(500);
     Serial.print(".");
   }
+  
   Serial.println("");
   Serial.print("Connected to ");
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
- 
+
   // Activate mDNS this is used to be able to connect to the server
   // with local DNS hostmane esp8266.local
   if (MDNS.begin("esp8266")) {
     Serial.println("MDNS responder started");
   }
+  
 }
 
 void setup_restServer(){
+  
   // Set server routing
   restServerRouting();
   // Set not found response
@@ -265,17 +391,58 @@ void setup_restServer(){
   // Start server
   server.begin();
   Serial.println("HTTP server started");
+  
+}
+
+void print_display(){
+
+  time_to_action = millis();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  
+  display.clearDisplay();
+  display.print("IP: ");
+  display.println(WiFi.localIP());
+  display.print("Accer Range: ");
+  display.println(mpu.getAccelerometerRange());
+  display.print("Gyro Range: ");
+  display.println(mpu.getGyroRange());
+  display.print("Filter: ");
+  display.println(mpu.getFilterBandwidth());
+  display.display();
+
 }
 
  
 void setup(void) {
+  
+  Wire.begin(2, 0);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3c);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.clearDisplay();   // clears the screen and buffer 
+  Wire.begin(2, 0);
+  
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  
   Serial.begin(115200);
   setup_MPU6050();
   setup_wifi();
   setup_restServer();
+
+  print_display();
+
+  time_to_action = millis();
   
 }
  
 void loop(void) {
+  if(millis()- time_to_action>10000){
+    print_display();
+    time_to_action = millis();
+  }
+  
   server.handleClient();
+  
 }
